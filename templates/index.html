@@ -6,9 +6,21 @@
         <title>ZCC Shuta Kumada</title>
         <!-- Bootstrap CSS -->
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+
+        <link rel="icon" type="image/png" href="#">
     </head>
+    <style>
+        td a {
+            display: block;
+            text-decoration: none;
+            color: black
+        }
+        a:hover {
+            color: black
+        }
+    </style>
     <body>
-        <table class="table">
+        <table class="table table-hover">
         <thead>
             <tr>
             <th scope="col">#</th>
@@ -19,24 +31,28 @@
         <tbody>
             {{ range .Tickets }}
             <tr>
-            <td>{{ .Id }}</td>
-            <td>{{ .Status }}</td>
-            <td>{{ .Subject }}</td>
+                <td><a href="/tickets/{{ .Id }}">{{ .Id }}</a></td>
+                <td><a href="/tickets/{{ .Id }}">{{ .Status }}</a></td>
+                <td><a href="/tickets/{{ .Id }}">{{ .Subject}}</a></td>
             </tr>
             {{ end }}
         </tbody>
     </table>
+    {{ if ne .PageNum 0 }}
+    <p>Showing page {{ .PageNum }} of {{ .Count }} tickets</p>
+    {{- end }}
+    
 
+    <!-- Only prev and next, as page numbers doesn't increase user experience -->
     <ul class="pagination">
-
-        {{ if .Meta.HasBefore }} 
-        <li class="page-item"><a name="prev-link" class="page-link" href="{{ .Links.Prev }}">Previous</a></li>
-        {{ end }}
-
-        {{ if .Meta.HasMore }}
-        <li class="page-item"><a name="next-link" class="page-link" href="{{ .Links.Next }}">Next</a></li>
-        {{ end }}
-
+        {{ if .PreviousPage }}
+        <li class="page-item"><a class="page-link" href="/tickets/?page=1&per_page={{ .TicketCountLimit }}"><<</a></li>
+        <li class="page-item"><a class="page-link" href="{{ .PreviousPage }}">Previous</a></li>
+        {{- end }}
+        {{ if .NextPage }}
+        <li class="page-item"><a class="page-link" href="{{ .NextPage }}">Next</a></li>
+        <li class="page-item"><a class="page-link" href="/tickets/?page={{ .LastPageNum }}&per_page={{ .TicketCountLimit }}">>></a></li>
+        {{- end }}
     </ul>
     </body>
 </html>

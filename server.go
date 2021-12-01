@@ -1,12 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
-	"strings"
+	"regexp"
 )
 
 type server struct {
@@ -14,34 +13,30 @@ type server struct {
 }
 
 type DataSource interface {
-	GetTickets(path string) (TicketList, error)
+	GetTickets(params string) (TicketList, error)
 	GetTicket(path string) (Ticket, error)
 }
 
-// should not be less than 2 for test to pass
-const itemLimit = 5
-const paginationPath = "/tickets/page[size]=%d"
-
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	logger.Println("Server HTTP")
+	ticketDetail, err := regexp.Compile(`/tickets/[0-9]+$`)
+	if err != nil {
+		logger.Fatal(err)
+	}
 
-	ticketDetail, err :=  
-
-	if strings.HasPrefix(r.URL.Path, "/tickets/[0-9]*") {
+	if ticketDetail.MatchString(r.URL.Path) {
 		// ticket detail
-		s.detailHandlerFunc(w, r, r.URL.Path)
+		s.detailHandlerFunc(w, r, r.URL.RawQuery)
 	} else {
-		if strings.HasPrefix(r.URL.Path, "/tickets/$") {
-			path := fmt.Sprintf(paginationPath, itemLimit)
-			s.indexHandlerFunc(w, r, path)
-		} else {
-			s.indexHandlerFunc(w, r, r.URL.Path)
-		}
+		s.indexHandlerFunc(w, r, r.URL.RawQuery)
 	}
 }
 
-func (s *server) indexHandlerFunc(w http.ResponseWriter, r *http.Request, path string) {
-	tickets, err := s.source.GetTickets(path)
+func (s *server) indexHandlerFunc(w http.ResponseWriter, r *http.Request, params string) {
+	logger.Println("Serving Index Handler")
+	tickets, err := s.source.GetTickets(params)
 	if err != nil {
+		logger.Println(err)
 		s.errorHandlerFunc(w, r, err)
 		return
 	}
@@ -52,6 +47,7 @@ func (s *server) indexHandlerFunc(w http.ResponseWriter, r *http.Request, path s
 
 // handler function
 func (s *server) detailHandlerFunc(w http.ResponseWriter, r *http.Request, path string) {
+	logger.Println("Serving Detail Handler")
 	ticket, err := s.source.GetTicket(path)
 	if err != nil {
 		s.errorHandlerFunc(w, r, err)
@@ -65,6 +61,7 @@ func (s *server) detailHandlerFunc(w http.ResponseWriter, r *http.Request, path 
 
 // handler for displaying error messages
 func (s *server) errorHandlerFunc(w http.ResponseWriter, r *http.Request, err error) {
+	logger.Println("errorHandlerFunc envoked")
 	w.WriteHeader(http.StatusBadRequest)
 	t := template.New("errors.html")
 	t = template.Must(t.ParseFiles("templates/errors.html"))
