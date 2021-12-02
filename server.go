@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"html/template"
 	"log"
 	"net/http"
@@ -71,6 +72,10 @@ func (s *server) errorHandlerFunc(w http.ResponseWriter, r *http.Request, err er
 var logger = log.New(os.Stderr, "logger: ", log.LstdFlags|log.Lshortfile)
 
 func main() {
+	port := flag.String("port", ":5000", "Port number")
+
+	flag.Parse()
 	s := server{&ApiDataSource{}}
-	logger.Fatalln(http.ListenAndServe(":5000", &s))
+	logger.Print(*port)
+	logger.Fatalln(http.ListenAndServe(*port, &s))
 }

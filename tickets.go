@@ -46,6 +46,7 @@ type Ticket struct {
 // retrives tickets with given id from api
 func (ads *ApiDataSource) GetTickets(path string, query url.Values) (TicketList, error) {
 	var ticketList TicketList
+
 	req, err := getNewTicketListRequest(path, query)
 	if err != nil {
 		logger.Println(err)
@@ -98,6 +99,9 @@ func (ads *ApiDataSource) GetTicket(path string, query url.Values) (Ticket, erro
 const initialPaginationParam = "page=%v&per_page=%v"
 
 func getNewTicketListRequest(path string, query url.Values) (*http.Request, error) {
+	if path == "/" {
+		path = "/tickets/"
+	}
 	req, err := getNewRequest(path)
 	if err != nil {
 		return nil, err
@@ -105,6 +109,7 @@ func getNewTicketListRequest(path string, query url.Values) (*http.Request, erro
 
 	page := query.Get("page")
 	perPage := query.Get("per_page")
+
 	if page != "" && perPage != "" {
 		req.URL.RawQuery = fmt.Sprintf(initialPaginationParam, page, perPage)
 	} else if page != "" {
