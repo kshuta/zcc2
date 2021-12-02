@@ -49,7 +49,6 @@ func (ds *StubDataSource) GetTickets(path string, params url.Values) (TicketList
 	// meaning if the ticketNum is bigger than the itemLimit, there would only be either Next or Prev
 	if ds.ticketNum > itemLimit {
 		if params.Get("page") == "next" {
-			logger.Println("int tickets/next")
 			tl.PreviousPage = "/prev"
 			tl.Tickets = tickets[itemLimit:]
 			tl.PageNum = "2"

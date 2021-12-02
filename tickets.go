@@ -79,8 +79,6 @@ func (ads *ApiDataSource) GetTicket(path string, query url.Values) (Ticket, erro
 		return ticket, err
 	}
 
-	logger.Println(req.URL)
-
 	res, err := fetchApi(req)
 	if err != nil {
 		logger.Println(err)
@@ -197,11 +195,9 @@ func parseTicketListJson(r *http.Response, ticketList *TicketList) error {
 	// modify links to be processable by server.go
 	if ticketList.NextPage != "" {
 		ticketList.NextPage = strings.Replace(re.FindString(ticketList.NextPage), ".json", "", -1)
-		logger.Println(ticketList.NextPage)
 	}
 	if ticketList.PreviousPage != "" {
 		ticketList.PreviousPage = strings.Replace(re.FindString(ticketList.PreviousPage), ".json", "", -1)
-		logger.Println(ticketList.PreviousPage)
 	}
 
 	// add page number
@@ -224,8 +220,6 @@ func parseTicketListJson(r *http.Response, ticketList *TicketList) error {
 		lastPageNum += 1
 	}
 	ticketList.LastPageNum = lastPageNum
-
-	logger.Println(ticketList.PageNum)
 
 	return nil
 }
@@ -250,7 +244,6 @@ func parseTicketJson(r *http.Response, ticket *Ticket, param url.Values) error {
 	}
 
 	ticket.RequesterName = wrapper.Users[0].Name
-	logger.Println(ticket)
 
 	// set BackLink
 	ticket.BackPage = param.Get("backPage")
