@@ -6,17 +6,29 @@ import (
 	"html"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
 	"regexp"
 	"testing"
 )
 
 type StubDataSource struct {
-	err       error
-	ticketNum int
+	err        error
+	ticketNum  int
+	testTicket Ticket
+}
+
+func TestMain(m *testing.M) {
+	f, err := os.OpenFile("logfile", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err == nil {
+		logger.SetOutput(f)
+	}
+
+	os.Exit(m.Run())
 }
 
 // Fucntion to mock the functionality of the data source with tickets
-func (ds *StubDataSource) GetTickets(params string) (TicketList, error) {
+func (ds *StubDataSource) GetTickets(path string, params url.Values) (TicketList, error) {
 	// ds.err will not be nil when testing for errors
 	if ds.err != nil {
 		return TicketList{}, ds.err
@@ -30,18 +42,24 @@ func (ds *StubDataSource) GetTickets(params string) (TicketList, error) {
 
 	// instantiate TicketList
 	tl := TicketList{}
+	tl.Count = ds.ticketNum
+	tl.TicketCountLimit = itemLimit
 
 	// for tests, there are only cases where the maximum number of pages are two
 	// meaning if the ticketNum is bigger than the itemLimit, there would only be either Next or Prev
 	if ds.ticketNum > itemLimit {
-		if params == "next" {
+		if params.Get("page") == "next" {
 			logger.Println("int tickets/next")
 			tl.PreviousPage = "/prev"
 			tl.Tickets = tickets[itemLimit:]
+			tl.PageNum = "2"
+			tl.LastPageNum = 2
 		} else {
 			// prev or nothing
 			tl.NextPage = "/next"
 			tl.Tickets = tickets[:itemLimit]
+			tl.PageNum = "1"
+			tl.LastPageNum = 2
 		}
 	} else {
 		tl.Tickets = tickets
@@ -51,14 +69,15 @@ func (ds *StubDataSource) GetTickets(params string) (TicketList, error) {
 
 }
 
-func (ds *StubDataSource) GetTicket(param string) (Ticket, error) {
+func (ds *StubDataSource) GetTicket(path string, param url.Values) (Ticket, error) {
 	if ds.err != nil {
 		return Ticket{}, ds.err
 	}
-	return Ticket{}, nil
+
+	return ds.testTicket, nil
 }
 
-func TestIndex(t *testing.T) {
+func TestGetIndex(t *testing.T) {
 	ds := StubDataSource{}
 	// default ticketNum
 	ds.ticketNum = itemLimit - 1
@@ -66,7 +85,7 @@ func TestIndex(t *testing.T) {
 		source: &ds,
 	}
 
-	t.Run("successful call to index without no Next/Prev", func(t *testing.T) {
+	t.Run("successful call to single paged index page", func(t *testing.T) {
 		req := getNewTestRequest("/tickets/")
 		res := httptest.NewRecorder()
 
@@ -75,11 +94,16 @@ func TestIndex(t *testing.T) {
 		// checks response body for the word "error"
 		assertNoError(t, res.Body.String())
 
-		// assert no next or prev button
-		expression := "<li.*Next.*</li>"
+		// assert next and prev button are not displayed
+		expression := `<li.*Next.*</li>`
 		assertNoExpression(t, res.Body.String(), expression, "next button")
-		expression = "<li.*Previous.*</li>"
+		expression = `<li.*Previous.*</li>`
 		assertNoExpression(t, res.Body.String(), expression, "previous button")
+
+		// assert no text regarding page number
+		expression = `<p>Showing page [0-9] of [0-9] pages.</p>`
+		assertNoExpression(t, res.Body.String(), expression, "page number")
+
 	})
 
 	t.Run("displays error", func(t *testing.T) {
@@ -112,15 +136,19 @@ func TestIndex(t *testing.T) {
 		// assert no error in response body
 		assertNoError(t, res.Body.String())
 
-		// check for the element <li> with the word "Next" inside
-		expression := "<li.*Next.*</li>"
-		assertExpression(t, res.Body.String(), expression, "next button")
-		// assert no list element with word "Previous" is found
-		expression = "<li.*Previous.*</li>"
-		assertNoExpression(t, res.Body.String(), expression, "previous button")
+		// assert next is enabled and prev is disabled
+		expression := `<li class=".*disabled".*Next.*</li>`
+		assertNoExpression(t, res.Body.String(), expression, "next button")
+		expression = `<li class=".*disabled".*Previous.*</li>`
+		assertExpression(t, res.Body.String(), expression, "previous button")
+
 		// assert the number of ticket on the page
-		expression = "</tr>"
+		expression = `</tr>`
 		assertElementCount(t, res.Body.String(), expression, itemLimit)
+
+		// assert page number being displayed
+		expression = `<p>Showing page 1 of [0-9] pages.</p>`
+		assertExpression(t, res.Body.String(), expression, "page number")
 
 	})
 
@@ -128,7 +156,7 @@ func TestIndex(t *testing.T) {
 		ds.ticketNum = itemLimit + 1
 		ds.err = nil
 		// TODO: change the hardcoded param
-		req := getNewTestRequest("/tickets/?next")
+		req := getNewTestRequest("/tickets/?page=next")
 		res := httptest.NewRecorder()
 
 		server.ServeHTTP(res, req)
@@ -136,15 +164,92 @@ func TestIndex(t *testing.T) {
 		// assert no error in response body
 		assertNoError(t, res.Body.String())
 
-		// check for the element <li> with the word "Previous" inside
-		expression := "<li.*Previous.*</li>"
-		assertExpression(t, res.Body.String(), expression, "previous button")
-		// assert no list element with word "Next" is found
-		expression = "<li.*Next.*</li>"
+		// assert next is disabled and prev is enabled
+		expression := `<li class=".*disabled".*Next.*</li>`
+		assertExpression(t, res.Body.String(), expression, "next button")
+		expression = `<li class=".*disabled".*Previous.*</li>`
 		assertNoExpression(t, res.Body.String(), expression, "previous button")
+
 		// assert the number of tickets on the page
-		expression = "</tr>"
+		expression = `</tr>`
 		assertElementCount(t, res.Body.String(), expression, ds.ticketNum-itemLimit)
+
+		// assert page number being displayed
+		expression = `<p>Showing page 2 of [0-9] pages.</p>`
+		assertExpression(t, res.Body.String(), expression, "page number")
+	})
+
+	t.Run("zero results", func(t *testing.T) {
+		ds.ticketNum = 0
+		ds.err = nil
+		req := getNewTestRequest("/tickets/")
+		res := httptest.NewRecorder()
+
+		server.ServeHTTP(res, req)
+
+		// assert next and prev button are not displaed
+		expression := `<li.*Next.*</li>`
+		assertNoExpression(t, res.Body.String(), expression, "next button")
+		expression = `<li.*Previous.*</li>`
+		assertNoExpression(t, res.Body.String(), expression, "previous button")
+
+		// assert message "No tickets to show" is displayed
+		expression = `<tr>.*No tickets to show.*</tr>`
+		assertExpression(t, res.Body.String(), expression, "no ticket to show message")
+	})
+}
+
+func TestGetDetail(t *testing.T) {
+	ds := StubDataSource{}
+	// default ticketNum
+	ds.ticketNum = itemLimit - 1
+	server := server{
+		source: &ds,
+	}
+
+	t.Run("successfully retrieve ticket", func(t *testing.T) {
+		// setup test ticket
+		ticket := Ticket{
+			Id:            1,
+			Subject:       "Test Ticket",
+			Description:   "This is a test ticket",
+			Status:        "Closed",
+			Priority:      "",
+			RequesterName: "Shuta Kumada",
+			Tags: []string{
+				"tag1",
+				"tag2",
+				"tag4",
+			},
+		}
+		ds.testTicket = ticket
+
+		req := getNewTestRequest("/tickets/1")
+		res := httptest.NewRecorder()
+
+		server.ServeHTTP(res, req)
+
+		assertNoError(t, res.Body.String())
+
+		// check if content is displayed on page
+		expression := fmt.Sprintf(`<p>Requester: %s</p>`, ticket.RequesterName)
+		assertExpression(t, res.Body.String(), expression, "name")
+
+		// check backlink is working
+		expression = `<a href=.*>Go Back To List</a>`
+		assertExpression(t, res.Body.String(), expression, "back link")
+
+	})
+
+	t.Run("displays error", func(t *testing.T) {
+		errMsg := "api is down"
+		ds.err = errors.New(errMsg)
+		req := getNewTestRequest("/tickets/1")
+		res := httptest.NewRecorder()
+
+		server.ServeHTTP(res, req)
+
+		assertExpression(t, res.Body.String(), errMsg, "error")
 	})
 
 }
@@ -173,7 +278,8 @@ func assertElementCount(t testing.TB, body, expression string, count int) {
 // checks response body for the keyword "error"
 func assertNoError(t testing.TB, body string) {
 	t.Helper()
-	assertNoExpression(t, body, "error:.*", "error")
+	errExpression := `<div class="alert alert-warning`
+	assertNoExpression(t, body, errExpression, "error")
 }
 
 // checks response body doesn't have the expresion passed in

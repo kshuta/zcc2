@@ -1,1 +1,21 @@
-Detail
+{{ define "content" }}
+<body>
+    <div class="container">
+        <h2>Ticket Detail</h2>
+        <h2>{{ .Subject }} 
+            {{ if eq .Status "open" }}
+            <span class="badge bg-danger">{{ .Status }}</span></h2>
+            {{ else if eq .Status "pending" }}
+            <span class="badge bg-primary">{{ .Status }}</span></h2>
+            {{ else }}
+            <span class="badge bg-secondary">{{ .Status }}</span></h2>
+            {{ end }}
+        <p>Requester: {{ .RequesterName }}</p>
+        <p>Tags: {{ range .Tags }}<span class="badge bg-info">#{{ . }}</span> {{- end }}</p>
+        <p>{{ .Description }}</p>
+
+        <a href="/tickets/?page={{ .BackPage }}">Go Back To List</a>
+
+    </div>
+</body>
+{{ end }}

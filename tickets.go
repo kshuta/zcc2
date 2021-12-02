@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -24,7 +24,7 @@ type TicketList struct {
 	Count            int      `json:"count"`
 	NextPage         string   `json:"next_page"`
 	PreviousPage     string   `json:"previous_page"`
-	PageNum          int
+	PageNum          string
 	LastPageNum      int
 	TicketCountLimit int
 }
@@ -33,20 +33,20 @@ type TicketList struct {
 // but it makes it easier to use json methods, and there will only be 25 tickets at most in memory, so it shouldn't be
 // to much of a problem
 type Ticket struct {
-	Id          int64  `json:"id"`
-	Subject     string `json:"subject"`
-	Description string `json:"description"`
-	Status      string `json:"status"`
-	Priority    string `json:"priority"`
-	User        struct {
-		Name string
-	}
+	Id            int64  `json:"id"`
+	Subject       string `json:"subject"`
+	Description   string `json:"description"`
+	Status        string `json:"status"`
+	Priority      string `json:"priority"`
+	RequesterName string
+	BackPage      string
+	Tags          []string `json:"tags"`
 }
 
 // retrives tickets with given id from api
-func (ads *ApiDataSource) GetTickets(params string) (TicketList, error) {
+func (ads *ApiDataSource) GetTickets(path string, query url.Values) (TicketList, error) {
 	var ticketList TicketList
-	req, err := getNewTicketListRequest(params)
+	req, err := getNewTicketListRequest(path, query)
 	if err != nil {
 		logger.Println(err)
 		return ticketList, err
@@ -61,8 +61,8 @@ func (ads *ApiDataSource) GetTickets(params string) (TicketList, error) {
 	// parse fetched content
 	if res.StatusCode >= 400 {
 		err = checkErrorStatus(res.StatusCode)
+		logger.Println(req.URL)
 	} else {
-		// parse response body (json)
 		err = parseTicketListJson(res, &ticketList)
 	}
 
@@ -71,24 +71,62 @@ func (ads *ApiDataSource) GetTickets(params string) (TicketList, error) {
 }
 
 // retrives ticket with given id from api
-func (ads *ApiDataSource) GetTicket(path string) (Ticket, error) {
-	return Ticket{}, nil
+func (ads *ApiDataSource) GetTicket(path string, query url.Values) (Ticket, error) {
+	var ticket Ticket
+	req, err := getNewTicketRequest(path)
+	if err != nil {
+		logger.Println(err)
+		return ticket, err
+	}
+
+	logger.Println(req.URL)
+
+	res, err := fetchApi(req)
+	if err != nil {
+		logger.Println(err)
+		return ticket, err
+	}
+
+	// parse fetched ticket
+	if res.StatusCode >= 400 {
+		err = checkErrorStatus(res.StatusCode)
+	} else {
+		err = parseTicketJson(res, &ticket, query)
+	}
+
+	return ticket, err
 }
 
-const initialPaginationParam = "?page=1&per_page=%d"
-const ticketListPath = "/tickets/"
+const initialPaginationParam = "page=%v&per_page=%v"
 
-func getNewTicketListRequest(params string) (*http.Request, error) {
-	req, err := getNewRequest(ticketListPath)
+func getNewTicketListRequest(path string, query url.Values) (*http.Request, error) {
+	req, err := getNewRequest(path)
 	if err != nil {
 		return nil, err
 	}
 
-	if params == "" {
-		req.URL.RawQuery = fmt.Sprintf(initialPaginationParam, itemLimit)
+	page := query.Get("page")
+	perPage := query.Get("per_page")
+	if page != "" && perPage != "" {
+		req.URL.RawQuery = fmt.Sprintf(initialPaginationParam, page, perPage)
+	} else if page != "" {
+		req.URL.RawQuery = fmt.Sprintf(initialPaginationParam, page, itemLimit)
+	} else if perPage != "" {
+		req.URL.RawQuery = fmt.Sprintf(initialPaginationParam, 1, perPage)
 	} else {
-		req.URL.RawQuery = params
+		req.URL.RawQuery = fmt.Sprintf(initialPaginationParam, 1, itemLimit)
 	}
+
+	return req, nil
+}
+
+func getNewTicketRequest(path string) (*http.Request, error) {
+	req, err := getNewRequest(path)
+	if err != nil {
+		return nil, err
+	}
+	req.URL.RawQuery = "include=users"
+
 	return req, nil
 }
 
@@ -111,13 +149,12 @@ func getNewRequest(path string) (*http.Request, error) {
 
 func fetchApi(req *http.Request) (*http.Response, error) {
 	client := http.Client{
-		Timeout: time.Second * 10,
+		Timeout: time.Second * 5,
 	}
 	return client.Do(req)
 }
 
 const baseDomain = "https://%s.zendesk.com/api/v2"
-const ticketPath = "/tickets/%d?include=users"
 
 func parseUrl(path string) string {
 	godotenv.Load()
@@ -135,9 +172,7 @@ func checkErrorStatus(code int) error {
 	var err error
 	switch code {
 	case http.StatusUnauthorized:
-		err = errors.New("unauthorized access: Check your credentials")
-	case http.StatusBadGateway:
-		err = errors.New("badgateway: The API might be down. Try again in a while")
+		err = errors.New("unauthorized access: check your credentials")
 	default:
 		errMsg := fmt.Sprintf("there was an error with the API, Status Code %d", code)
 		err = errors.New(errMsg)
@@ -171,21 +206,15 @@ func parseTicketListJson(r *http.Response, ticketList *TicketList) error {
 
 	// add page number
 	query := r.Request.URL.Query()
-	num, ok := query["page"]
+	num := query.Get("page")
 	if ticketList.NextPage != "" || ticketList.PreviousPage != "" {
 		// if there are multiple pages
-		if ok {
+		if num != "" {
 			// page num found in query
-			i64, err := strconv.ParseInt(num[0], 10, 32)
-			if err != nil {
-				logger.Println(err)
-				return err
-			}
-
-			ticketList.PageNum = int(i64)
+			ticketList.PageNum = num
 		} else {
 			// page num not found in query i.e. first page
-			ticketList.PageNum = 1
+			ticketList.PageNum = "1"
 		}
 	}
 
@@ -195,6 +224,36 @@ func parseTicketListJson(r *http.Response, ticketList *TicketList) error {
 		lastPageNum += 1
 	}
 	ticketList.LastPageNum = lastPageNum
+
+	logger.Println(ticketList.PageNum)
+
+	return nil
+}
+
+func parseTicketJson(r *http.Response, ticket *Ticket, param url.Values) error {
+	decoder := json.NewDecoder(r.Body)
+
+	type User struct {
+		Name string `json:"name"`
+	}
+
+	wrapper := struct {
+		Ticket *Ticket `json:"ticket"`
+		Users  []User
+	}{
+		ticket,
+		[]User{},
+	}
+	if err := decoder.Decode(&wrapper); err != nil {
+		logger.Println(err)
+		return err
+	}
+
+	ticket.RequesterName = wrapper.Users[0].Name
+	logger.Println(ticket)
+
+	// set BackLink
+	ticket.BackPage = param.Get("backPage")
 
 	return nil
 }
