@@ -44,7 +44,7 @@ func (ds *StubDataSource) GetTickets(params url.Values) (TicketList, error) {
 	// instantiate TicketList
 	tl := TicketList{}
 	tl.Count = ds.ticketNum
-	tl.TicketCountLimit = itemLimit
+	tl.TicketDisplayLimit = itemLimit
 
 	// for tests, there are only cases where the maximum number of pages are two
 	// meaning if the ticketNum is bigger than the itemLimit, there would only be either Next or Prev

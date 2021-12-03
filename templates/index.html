@@ -48,10 +48,10 @@
         <!-- Only prev and next, as page numbers doesn't increase user experience -->
         {{ if ne .PageNum 0 }}
         <ul class="pagination">
-            <li class="page-item {{ if not .PreviousPage }}disabled{{- end }}"><a class="page-link" href="/tickets/?page=1&per_page={{ .TicketCountLimit }}">&laquo;</a></li>
+            <li class="page-item {{ if not .PreviousPage }}disabled{{- end }}"><a class="page-link" href="/tickets/?page=1&per_page={{ .TicketDisplayLimit }}">&laquo;</a></li>
             <li class="page-item {{ if not .PreviousPage }}disabled{{- end }}"><a class="page-link" href="{{ .PreviousPage }}">Previous</a></li>
             <li class="page-item {{ if not .NextPage }}disabled{{- end }}"><a class="page-link" href="{{ .NextPage }}">Next</a></li>
-            <li class="page-item {{ if not .NextPage }}disabled{{- end }}"><a class="page-link" href="/tickets/?page={{ .LastPageNum }}&per_page={{ .TicketCountLimit }}">&raquo</a></li>
+            <li class="page-item {{ if not .NextPage }}disabled{{- end }}"><a class="page-link" href="/tickets/?page={{ .LastPageNum }}&per_page={{ .TicketDisplayLimit }}">&raquo</a></li>
         </ul>
         {{- end }}
     </div>

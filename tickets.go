@@ -22,13 +22,13 @@ const itemLimit = 25
 // TicketList acts as a wrapper to Ticket to make unmarshalling the json easier.
 // It also stores information such as links to the next and previous page for pagination
 type TicketList struct {
-	Tickets          []Ticket `json:"tickets"`
-	Count            int      `json:"count"`
-	NextPage         string   `json:"next_page"`
-	PreviousPage     string   `json:"previous_page"`
-	PageNum          int      // used to assign BackPage for Ticket
-	LastPageNum      int      // used for ">>" button to skip to last page in index.html
-	TicketCountLimit int      // used to generate query in index.html
+	Tickets            []Ticket `json:"tickets"`
+	Count              int      `json:"count"`
+	NextPage           string   `json:"next_page"`
+	PreviousPage       string   `json:"previous_page"`
+	PageNum            int      // used to assign BackPage for Ticket
+	LastPageNum        int      // used for ">>" button to skip to last page in index.html
+	TicketDisplayLimit int      // used to generate query in index.html
 }
 
 // Ticket keeps track of information regarding a single ticket
@@ -233,10 +233,10 @@ func setCustomTicketListFields(r *http.Response, ticketList *TicketList) {
 		}
 	}
 
-	ticketList.TicketCountLimit = itemLimit
+	ticketList.TicketDisplayLimit = itemLimit
 
-	lastPageNum := ticketList.Count / ticketList.TicketCountLimit
-	if ticketList.Count%ticketList.TicketCountLimit > 0 {
+	lastPageNum := ticketList.Count / ticketList.TicketDisplayLimit
+	if ticketList.Count%ticketList.TicketDisplayLimit > 0 {
 		lastPageNum += 1
 	}
 	ticketList.LastPageNum = lastPageNum
