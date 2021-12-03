@@ -185,6 +185,8 @@ func checkErrorStatus(code int) error {
 	switch code {
 	case http.StatusUnauthorized:
 		err = errors.New("unauthorized access: check your credentials")
+	case http.StatusNotFound:
+		err = errors.New("not found: the page you're looking for doesn't exist")
 	default:
 		errMsg := fmt.Sprintf("there was an error with the API, Status Code %d", code)
 		err = errors.New(errMsg)
