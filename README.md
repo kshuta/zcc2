@@ -15,7 +15,7 @@ git clone git@github.com:kshuta/zcc2.git
 Make a `.env` file within the root of the project directory and add the following environment variables:
 - `API_TOKEN`: The api token to access your zendesk account. Make sure API access is enabled for your workspace.
 - `API_EMAIL`: The email address you use to access your zendesk account.
-- `API_SUBDOMAIN`: The subdomain for your zendesk workplace.
+- `API_SUBDOMAIN`: The subdomain for your zendesk workplace. For example, if your workplace url was `https://zccchallenge.zendesk.com`, please set `zccchallenge` as your `API_SUBDOMAIN`
 ```
 API_TOKEN=xxxxhdhdhdhxxxx
 API_EMAIL=example@zendesk.com
