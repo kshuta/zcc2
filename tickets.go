@@ -8,46 +8,52 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
 )
 
-const itemLimit = 25 // test will not pass if itemLimit less than 2
+// itemLimit sets the number of tickets to be displayed on a single page.
+// test will not pass if itemLimit is less than 2, which is reasonable as it doesn't make sense to have a one ticket list page
+const itemLimit = 25
 
-type ApiDataSource struct {
-}
-
+// TicketList acts as a wrapper to Ticket to make unmarshalling the json easier.
+// It also stores information such as links to the next and previous page for pagination
 type TicketList struct {
 	Tickets          []Ticket `json:"tickets"`
 	Count            int      `json:"count"`
 	NextPage         string   `json:"next_page"`
 	PreviousPage     string   `json:"previous_page"`
-	PageNum          string
-	LastPageNum      int
-	TicketCountLimit int
+	PageNum          int      // used to assign BackPage for Ticket
+	LastPageNum      int      // used for ">>" button to skip to last page in index.html
+	TicketCountLimit int      // used to generate query in index.html
 }
 
-// pretty useless to store all the information when in reality you only need id, subject and url for list view
-// but it makes it easier to use json methods, and there will only be 25 tickets at most in memory, so it shouldn't be
-// to much of a problem
+// Ticket keeps track of information regarding a single ticket
 type Ticket struct {
-	Id            int64  `json:"id"`
-	Subject       string `json:"subject"`
-	Description   string `json:"description"`
-	Status        string `json:"status"`
-	Priority      string `json:"priority"`
-	RequesterName string
-	BackPage      string
+	Id            int64    `json:"id"`
+	Subject       string   `json:"subject"`
+	Description   string   `json:"description"`
+	Status        string   `json:"status"`
+	Priority      string   `json:"priority"`
+	RequesterName string   // set by sideloaded user info
+	BackPage      string   // used to create link to go back to the original page in ticket list view
 	Tags          []string `json:"tags"`
 }
 
-// retrives tickets with given id from api
-func (ads *ApiDataSource) GetTickets(path string, query url.Values) (TicketList, error) {
+// ApiDataSource is a type that implements server.
+// It is used as a datasource that retrieves data from the zendesk api.
+type ApiDataSource struct {
+}
+
+// GetTickets retrives tickets with given id from api
+// path
+func (ads *ApiDataSource) GetTickets(query url.Values) (TicketList, error) {
 	var ticketList TicketList
 
-	req, err := getNewTicketListRequest(path, query)
+	req, err := getNewTicketListRequest(query)
 	if err != nil {
 		logger.Println(err)
 		return ticketList, err
@@ -71,7 +77,7 @@ func (ads *ApiDataSource) GetTickets(path string, query url.Values) (TicketList,
 
 }
 
-// retrives ticket with given id from api
+// GetTicket retrives ticket from the zendesk api, with the id in path
 func (ads *ApiDataSource) GetTicket(path string, query url.Values) (Ticket, error) {
 	var ticket Ticket
 	req, err := getNewTicketRequest(path)
@@ -96,26 +102,23 @@ func (ads *ApiDataSource) GetTicket(path string, query url.Values) (Ticket, erro
 	return ticket, err
 }
 
+// initialPaginationParam is a string used to generate query parameter
+// to fetch paginated results from the API.
 const initialPaginationParam = "page=%v&per_page=%v"
 
-func getNewTicketListRequest(path string, query url.Values) (*http.Request, error) {
-	if path == "/" {
-		path = "/tickets/"
-	}
-	req, err := getNewRequest(path)
+// getNewTicketListReques creates a request to fetch tickets from the api
+// The argument query is expected to have a "page" parameter to specify the pagination.
+// if query doesn't have a "page", it will default to 1
+func getNewTicketListRequest(query url.Values) (*http.Request, error) {
+	req, err := getNewRequest("/tickets/")
 	if err != nil {
 		return nil, err
 	}
 
 	page := query.Get("page")
-	perPage := query.Get("per_page")
 
-	if page != "" && perPage != "" {
-		req.URL.RawQuery = fmt.Sprintf(initialPaginationParam, page, perPage)
-	} else if page != "" {
+	if page != "" {
 		req.URL.RawQuery = fmt.Sprintf(initialPaginationParam, page, itemLimit)
-	} else if perPage != "" {
-		req.URL.RawQuery = fmt.Sprintf(initialPaginationParam, 1, perPage)
 	} else {
 		req.URL.RawQuery = fmt.Sprintf(initialPaginationParam, 1, itemLimit)
 	}
@@ -123,6 +126,9 @@ func getNewTicketListRequest(path string, query url.Values) (*http.Request, erro
 	return req, nil
 }
 
+// getNewTicketRequest creates a request to fetch a ticket ffrom the api
+// the argument path is expected to have the id of the ticket it's trying to retrieve.
+// the request will have a query to sideload users when fetching a single ticket.
 func getNewTicketRequest(path string) (*http.Request, error) {
 	req, err := getNewRequest(path)
 	if err != nil {
@@ -133,6 +139,7 @@ func getNewTicketRequest(path string) (*http.Request, error) {
 	return req, nil
 }
 
+// getNewRequest generates a request to fetch ticket/s from the api.
 func getNewRequest(path string) (*http.Request, error) {
 	godotenv.Load()
 	url := parseUrl(path)
@@ -150,6 +157,7 @@ func getNewRequest(path string) (*http.Request, error) {
 	return req, nil
 }
 
+// fetchApi will invoke the get request with the request passed in.
 func fetchApi(req *http.Request) (*http.Response, error) {
 	client := http.Client{
 		Timeout: time.Second * 5,
@@ -157,21 +165,22 @@ func fetchApi(req *http.Request) (*http.Response, error) {
 	return client.Do(req)
 }
 
+// baseDomain is a string used to generate the url
+// to fetch the api.
 const baseDomain = "https://%s.zendesk.com/api/v2"
 
 func parseUrl(path string) string {
 	godotenv.Load()
 	subDomain := os.Getenv("API_SUBDOMAIN")
-	domain := fmt.Sprintf(baseDomain, subDomain) // up until api/v2
+	domain := fmt.Sprintf(baseDomain, subDomain)
 
 	return domain + path
 
 }
 
-// switches through error status and returns appropriate error
+// checkErrorStatus switches through error status and returns appropriate error
 func checkErrorStatus(code int) error {
-	// api errors
-	// hard coded because errors have different json format
+	// errors are hard coded because errors have different json format
 	var err error
 	switch code {
 	case http.StatusUnauthorized:
@@ -183,7 +192,7 @@ func checkErrorStatus(code int) error {
 	return err
 }
 
-// parses json in passed in io.Reader, and stores data in passed in ticketList
+// parseTicketListJson parses json from passed in response, and stores data in passed in ticketList
 func parseTicketListJson(r *http.Response, ticketList *TicketList) error {
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(ticketList); err != nil {
@@ -191,7 +200,7 @@ func parseTicketListJson(r *http.Response, ticketList *TicketList) error {
 		return err
 	}
 
-	// regex to acquire path to next and prev links
+	// regex to acquire query in NextPage and PreviousPage
 	re, err := regexp.Compile(`/tickets.json\?[\w=&]+`)
 	if err != nil {
 		logger.Fatalln(err)
@@ -205,30 +214,35 @@ func parseTicketListJson(r *http.Response, ticketList *TicketList) error {
 		ticketList.PreviousPage = strings.Replace(re.FindString(ticketList.PreviousPage), ".json", "", -1)
 	}
 
-	// add page number
+	setCustomTicketListFields(r, ticketList)
+
+	return nil
+}
+
+// setCustomTicketListFields sets the custom TicketListFields
+func setCustomTicketListFields(r *http.Response, ticketList *TicketList) {
+	// set PageNum
 	query := r.Request.URL.Query()
 	num := query.Get("page")
 	if ticketList.NextPage != "" || ticketList.PreviousPage != "" {
 		// if there are multiple pages
 		if num != "" {
 			// page num found in query
-			ticketList.PageNum = num
-		} else {
-			// page num not found in query i.e. first page
-			ticketList.PageNum = "1"
+			i64, _ := strconv.ParseInt(num, 10, 32)
+			ticketList.PageNum = int(i64)
 		}
 	}
 
 	ticketList.TicketCountLimit = itemLimit
+
 	lastPageNum := ticketList.Count / ticketList.TicketCountLimit
 	if ticketList.Count%ticketList.TicketCountLimit > 0 {
 		lastPageNum += 1
 	}
 	ticketList.LastPageNum = lastPageNum
-
-	return nil
 }
 
+// parseTicketJson parses json from passed in response, and stores data in passed in ticket
 func parseTicketJson(r *http.Response, ticket *Ticket, param url.Values) error {
 	decoder := json.NewDecoder(r.Body)
 
@@ -236,6 +250,7 @@ func parseTicketJson(r *http.Response, ticket *Ticket, param url.Values) error {
 		Name string `json:"name"`
 	}
 
+	// wrapper to make unmarshalling json easier
 	wrapper := struct {
 		Ticket *Ticket `json:"ticket"`
 		Users  []User
@@ -250,7 +265,6 @@ func parseTicketJson(r *http.Response, ticket *Ticket, param url.Values) error {
 
 	ticket.RequesterName = wrapper.Users[0].Name
 
-	// set BackLink
 	ticket.BackPage = param.Get("backPage")
 
 	return nil

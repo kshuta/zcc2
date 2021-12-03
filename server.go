@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -10,17 +11,21 @@ import (
 	"regexp"
 )
 
+// struct that implements Handler
+// different data source can be used for tests, making them independent
+// from the api
 type server struct {
 	source DataSource
 }
 
+// DataSource is an interface that acts as a data source for the server.
 type DataSource interface {
-	GetTickets(path string, query url.Values) (TicketList, error)
+	GetTickets(query url.Values) (TicketList, error)
 	GetTicket(path string, query url.Values) (Ticket, error)
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	logger.Println("Server HTTP")
+	logger.Println("Serving HTTP")
 	ticketDetail, err := regexp.Compile(`/tickets/[0-9]+[a-z]*$`)
 	if err != nil {
 		logger.Fatal(err)
@@ -29,13 +34,15 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if ticketDetail.MatchString(r.URL.Path) {
 		s.detailHandlerFunc(w, r, r.URL.Path, r.URL.Query())
 	} else {
-		s.indexHandlerFunc(w, r, r.URL.Path, r.URL.Query())
+		s.indexHandlerFunc(w, r, r.URL.Query())
 	}
 }
 
-func (s *server) indexHandlerFunc(w http.ResponseWriter, r *http.Request, path string, query url.Values) {
-	logger.Println("Serving Index Handler")
-	tickets, err := s.source.GetTickets(path, query)
+// indexHandlerFunc displays the ticket list view
+// will envoke error handler if GetTickets returns err
+func (s *server) indexHandlerFunc(w http.ResponseWriter, r *http.Request, query url.Values) {
+	logger.Println("invoking Index Handler")
+	tickets, err := s.source.GetTickets(query)
 	if err != nil {
 		logger.Println(err)
 		s.errorHandlerFunc(w, r, err)
@@ -46,9 +53,10 @@ func (s *server) indexHandlerFunc(w http.ResponseWriter, r *http.Request, path s
 	t.Execute(w, tickets)
 }
 
-// handler function
+// detailHandlerFunc displays the ticket detail view
+// will encokde error handler if GetTicket returns err
 func (s *server) detailHandlerFunc(w http.ResponseWriter, r *http.Request, path string, query url.Values) {
-	logger.Println("Serving Detail Handler")
+	logger.Println("invoking Detail Handler")
 	ticket, err := s.source.GetTicket(path, query)
 	if err != nil {
 		s.errorHandlerFunc(w, r, err)
@@ -60,22 +68,24 @@ func (s *server) detailHandlerFunc(w http.ResponseWriter, r *http.Request, path 
 	t.Execute(w, ticket)
 }
 
-// handler for displaying error messages
+// errorHandlerFunc displays the error page
 func (s *server) errorHandlerFunc(w http.ResponseWriter, r *http.Request, err error) {
-	logger.Println("errorHandlerFunc envoked")
+	logger.Println("invoking error handler")
 	w.WriteHeader(http.StatusBadRequest)
 	t := template.New("layout")
 	t = template.Must(t.ParseFiles("templates/layout.html", "templates/errors.html"))
 	t.Execute(w, err.Error())
 }
 
+// custom logger
 var logger = log.New(os.Stderr, "logger: ", log.LstdFlags|log.Lshortfile)
 
 func main() {
 	port := flag.String("port", ":5000", "Port number")
-
 	flag.Parse()
+
 	s := server{&ApiDataSource{}}
-	logger.Print(*port)
+
+	fmt.Printf("serving at port %v", *port)
 	logger.Fatalln(http.ListenAndServe(*port, &s))
 }

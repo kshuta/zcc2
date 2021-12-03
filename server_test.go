@@ -12,6 +12,7 @@ import (
 	"testing"
 )
 
+// StubDataSource imitiates the api for tests
 type StubDataSource struct {
 	err        error
 	ticketNum  int
@@ -19,6 +20,7 @@ type StubDataSource struct {
 }
 
 func TestMain(m *testing.M) {
+	// set different output path for custom logger
 	f, err := os.OpenFile("logfile", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err == nil {
 		logger.SetOutput(f)
@@ -27,15 +29,14 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// Fucntion to mock the functionality of the data source with tickets
-func (ds *StubDataSource) GetTickets(path string, params url.Values) (TicketList, error) {
+func (ds *StubDataSource) GetTickets(params url.Values) (TicketList, error) {
 	// ds.err will not be nil when testing for errors
 	if ds.err != nil {
 		return TicketList{}, ds.err
 	}
 	tickets := make([]Ticket, 0)
 
-	// create items
+	// create tickets
 	for i := 0; i < ds.ticketNum; i++ {
 		tickets = append(tickets, Ticket{Subject: fmt.Sprintf("Test %d", i), Id: int64(i + 1), Status: "open"})
 	}
@@ -51,13 +52,13 @@ func (ds *StubDataSource) GetTickets(path string, params url.Values) (TicketList
 		if params.Get("page") == "next" {
 			tl.PreviousPage = "/prev"
 			tl.Tickets = tickets[itemLimit:]
-			tl.PageNum = "2"
+			tl.PageNum = 2
 			tl.LastPageNum = 2
 		} else {
 			// prev or nothing
 			tl.NextPage = "/next"
 			tl.Tickets = tickets[:itemLimit]
-			tl.PageNum = "1"
+			tl.PageNum = 1
 			tl.LastPageNum = 2
 		}
 	} else {
@@ -253,7 +254,7 @@ func TestGetDetail(t *testing.T) {
 
 }
 
-// gets new request with passed in url
+// getNewTestRequest gets new request with passed in url
 func getNewTestRequest(url string) *http.Request {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
@@ -262,6 +263,8 @@ func getNewTestRequest(url string) *http.Request {
 	return req
 }
 
+// assertElementCount will count the number of exprssions within the passed in body
+// and envokes error if the count doesn't match
 func assertElementCount(t testing.TB, body, expression string, count int) {
 	r, err := regexp.Compile(expression)
 	if err != nil {
@@ -274,14 +277,14 @@ func assertElementCount(t testing.TB, body, expression string, count int) {
 	}
 }
 
-// checks response body for the keyword "error"
+// assertNoError is a convinience function for checking errors
 func assertNoError(t testing.TB, body string) {
 	t.Helper()
 	errExpression := `<div class="alert alert-warning`
 	assertNoExpression(t, body, errExpression, "error")
 }
 
-// checks response body doesn't have the expresion passed in
+// assertNoExpresion asserts that the response body doesn't match the regular expression passed in
 func assertNoExpression(t testing.TB, body, expression, unexpectedString string) {
 	t.Helper()
 	r, err := regexp.Compile(expression)
@@ -294,6 +297,7 @@ func assertNoExpression(t testing.TB, body, expression, unexpectedString string)
 	}
 }
 
+// assertExpresion asserts that the response body matches the regular expression passed in
 func assertExpression(t testing.TB, body, expression, expectedString string) {
 	t.Helper()
 

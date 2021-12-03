@@ -11,6 +11,7 @@
 </style>
 <body>
     <div class="container">
+        <h1>Tickets</h1>
         <table class="table table-hover">
             <thead>
                 <tr>
@@ -38,14 +39,14 @@
             {{ end }}
             </tbody>
         </table>
-        {{ if .PageNum }}
+        {{ if ne .PageNum 0 }}
         <p>Showing page {{ .PageNum }} of {{ .LastPageNum }} pages.</p>
         {{- end }}
         <p>{{ .Count }} tickets total</p>
 
 
         <!-- Only prev and next, as page numbers doesn't increase user experience -->
-        {{ if ne .PageNum "" }}
+        {{ if ne .PageNum 0 }}
         <ul class="pagination">
             <li class="page-item {{ if not .PreviousPage }}disabled{{- end }}"><a class="page-link" href="/tickets/?page=1&per_page={{ .TicketCountLimit }}">&laquo;</a></li>
             <li class="page-item {{ if not .PreviousPage }}disabled{{- end }}"><a class="page-link" href="{{ .PreviousPage }}">Previous</a></li>
