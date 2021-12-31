@@ -9,24 +9,30 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+
+	"github.com/kshuta/zcc2/tickets"
 )
 
 // struct that implements Handler
-// different data source can be used for tests, making them independent
+// different data Source can be used for tests, making them independent
 // from the api
 type server struct {
-	source DataSource
+	Source DataSource
 }
 
-// DataSource is an interface that acts as a data source for the server.
+// DataSource is an interface that acts as a data Source for the Server.
 type DataSource interface {
-	GetTickets(query url.Values) (TicketList, error)
-	GetTicket(path string, query url.Values) (Ticket, error)
+	GetTickets(query url.Values) (tickets.TicketList, error)
+	GetTicket(path string, query url.Values) (tickets.Ticket, error)
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	logger.Println("Serving HTTP")
 	ticketDetail, err := regexp.Compile(`/tickets/[0-9]+[a-z]*$`)
+	if err != nil {
+		logger.Fatal(err)
+	}
+
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -42,7 +48,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // will envoke error handler if GetTickets returns err
 func (s *server) indexHandlerFunc(w http.ResponseWriter, r *http.Request, query url.Values) {
 	logger.Println("invoking Index Handler")
-	tickets, err := s.source.GetTickets(query)
+	tickets, err := s.Source.GetTickets(query)
 	if err != nil {
 		logger.Println(err)
 		s.errorHandlerFunc(w, r, err)
@@ -55,9 +61,9 @@ func (s *server) indexHandlerFunc(w http.ResponseWriter, r *http.Request, query 
 
 // detailHandlerFunc displays the ticket detail view
 // will encokde error handler if GetTicket returns err
-func (s *server) detailHandlerFunc(w http.ResponseWriter, r *http.Request, path string, query url.Values) {
+func (s *server) detailHandlerFunc(w http.ResponseWriter, r *http.Request, urlpath string, query url.Values) {
 	logger.Println("invoking Detail Handler")
-	ticket, err := s.source.GetTicket(path, query)
+	ticket, err := s.Source.GetTicket(urlpath, query)
 	if err != nil {
 		s.errorHandlerFunc(w, r, err)
 		return
@@ -84,8 +90,8 @@ func main() {
 	port := flag.String("port", ":5000", "Port number")
 	flag.Parse()
 
-	s := server{&ApiDataSource{}}
+	s := server{Source: &tickets.ApiDataSource{}}
 
 	fmt.Printf("serving at port %v", *port)
-	logger.Fatalln(http.ListenAndServe(*port, &s))
+	log.Fatalln(http.ListenAndServe(*port, &s))
 }

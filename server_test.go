@@ -10,13 +10,15 @@ import (
 	"os"
 	"regexp"
 	"testing"
+
+	"github.com/kshuta/zcc2/tickets"
 )
 
 // StubDataSource imitiates the api for tests
 type StubDataSource struct {
 	err        error
 	ticketNum  int
-	testTicket Ticket
+	testTicket tickets.Ticket
 }
 
 func TestMain(m *testing.M) {
@@ -29,49 +31,49 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func (ds *StubDataSource) GetTickets(params url.Values) (TicketList, error) {
+func (ds *StubDataSource) GetTickets(params url.Values) (tickets.TicketList, error) {
 	// ds.err will not be nil when testing for errors
 	if ds.err != nil {
-		return TicketList{}, ds.err
+		return tickets.TicketList{}, ds.err
 	}
-	tickets := make([]Ticket, 0)
+	ticks := make([]tickets.Ticket, 0)
 
 	// create tickets
 	for i := 0; i < ds.ticketNum; i++ {
-		tickets = append(tickets, Ticket{Subject: fmt.Sprintf("Test %d", i), Id: int64(i + 1), Status: "open"})
+		ticks = append(ticks, tickets.Ticket{Subject: fmt.Sprintf("Test %d", i), Id: int64(i + 1), Status: "open"})
 	}
 
 	// instantiate TicketList
-	tl := TicketList{}
+	tl := tickets.TicketList{}
 	tl.Count = ds.ticketNum
-	tl.TicketDisplayLimit = itemLimit
+	tl.TicketDisplayLimit = tickets.ItemLimit
 
 	// for tests, there are only cases where the maximum number of pages are two
 	// meaning if the ticketNum is bigger than the itemLimit, there would only be either Next or Prev
-	if ds.ticketNum > itemLimit {
+	if ds.ticketNum > tickets.ItemLimit {
 		if params.Get("page") == "next" {
 			tl.PreviousPage = "/prev"
-			tl.Tickets = tickets[itemLimit:]
+			tl.Tickets = ticks[tickets.ItemLimit:]
 			tl.PageNum = 2
 			tl.LastPageNum = 2
 		} else {
 			// prev or nothing
 			tl.NextPage = "/next"
-			tl.Tickets = tickets[:itemLimit]
+			tl.Tickets = ticks[:tickets.ItemLimit]
 			tl.PageNum = 1
 			tl.LastPageNum = 2
 		}
 	} else {
-		tl.Tickets = tickets
+		tl.Tickets = ticks
 	}
 
 	return tl, nil
 
 }
 
-func (ds *StubDataSource) GetTicket(path string, param url.Values) (Ticket, error) {
+func (ds *StubDataSource) GetTicket(path string, param url.Values) (tickets.Ticket, error) {
 	if ds.err != nil {
-		return Ticket{}, ds.err
+		return tickets.Ticket{}, ds.err
 	}
 
 	return ds.testTicket, nil
@@ -80,9 +82,9 @@ func (ds *StubDataSource) GetTicket(path string, param url.Values) (Ticket, erro
 func TestGetIndex(t *testing.T) {
 	ds := StubDataSource{}
 	// default ticketNum
-	ds.ticketNum = itemLimit - 1
+	ds.ticketNum = tickets.ItemLimit - 1
 	server := server{
-		source: &ds,
+		Source: &ds,
 	}
 
 	t.Run("successful call to single paged index page", func(t *testing.T) {
@@ -126,7 +128,7 @@ func TestGetIndex(t *testing.T) {
 	})
 
 	t.Run("displays 2 paged index first page", func(t *testing.T) {
-		ds.ticketNum = itemLimit + 1
+		ds.ticketNum = tickets.ItemLimit + 1
 		ds.err = nil
 		req := getNewTestRequest("/tickets/")
 		res := httptest.NewRecorder()
@@ -144,7 +146,7 @@ func TestGetIndex(t *testing.T) {
 
 		// assert the number of ticket on the page
 		expression = `</tr>`
-		assertElementCount(t, res.Body.String(), expression, itemLimit)
+		assertElementCount(t, res.Body.String(), expression, tickets.ItemLimit)
 
 		// assert page number being displayed
 		expression = `<p>Showing page 1 of [0-9] pages.</p>`
@@ -153,7 +155,7 @@ func TestGetIndex(t *testing.T) {
 	})
 
 	t.Run("display 2 paged index second page", func(t *testing.T) {
-		ds.ticketNum = itemLimit + 1
+		ds.ticketNum = tickets.ItemLimit + 1
 		ds.err = nil
 		// TODO: change the hardcoded param
 		req := getNewTestRequest("/tickets/?page=next")
@@ -172,7 +174,7 @@ func TestGetIndex(t *testing.T) {
 
 		// assert the number of tickets on the page
 		expression = `</tr>`
-		assertElementCount(t, res.Body.String(), expression, ds.ticketNum-itemLimit)
+		assertElementCount(t, res.Body.String(), expression, ds.ticketNum-tickets.ItemLimit)
 
 		// assert page number being displayed
 		expression = `<p>Showing page 2 of [0-9] pages.</p>`
@@ -202,16 +204,16 @@ func TestGetIndex(t *testing.T) {
 func TestGetDetail(t *testing.T) {
 	ds := StubDataSource{}
 	// default ticketNum
-	ds.ticketNum = itemLimit - 1
+	ds.ticketNum = tickets.ItemLimit - 1
 	server := server{
-		source: &ds,
+		Source: &ds,
 	}
 
 	t.Run("successfully retrieve ticket", func(t *testing.T) {
 		// setup test ticket
-		ticket := Ticket{
+		ticket := tickets.Ticket{
 			Id:            1,
-			Subject:       "Test Ticket",
+			Subject:       "Test tickets.Ticket",
 			Description:   "This is a test ticket",
 			Status:        "Closed",
 			Priority:      "",

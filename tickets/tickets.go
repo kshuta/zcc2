@@ -1,9 +1,13 @@
-package main
+/*
+tickets package handles the query of tickets from the datasource.
+*/
+package tickets
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,9 +19,18 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// itemLimit sets the number of tickets to be displayed on a single page.
-// test will not pass if itemLimit is less than 2, which is reasonable as it doesn't make sense to have a one ticket list page
-const itemLimit = 25
+// custom logger
+var logger = log.New(os.Stderr, "logger: ", log.LstdFlags|log.Lshortfile)
+
+const (
+	// ItemLimit sets the number of tickets to be displayed on a single page.
+	// test will not pass if ItemLimit is less than 2, which is reasonable as it doesn't make sense to have a one ticket list page
+	ItemLimit = 25
+
+	// initialPaginationParam is a string used to generate query parameter
+	// to fetch paginated results from the API.
+	initialPaginationParam = "page=%v&per_page=%v"
+)
 
 // TicketList acts as a wrapper to Ticket to make unmarshalling the json easier.
 // It also stores information such as links to the next and previous page for pagination
@@ -48,8 +61,7 @@ type Ticket struct {
 type ApiDataSource struct {
 }
 
-// GetTickets retrives tickets with given id from api
-// path
+// GetTickets retrives tickets from the API
 func (ads *ApiDataSource) GetTickets(query url.Values) (TicketList, error) {
 	var ticketList TicketList
 
@@ -67,6 +79,7 @@ func (ads *ApiDataSource) GetTickets(query url.Values) (TicketList, error) {
 
 	// parse fetched content
 	if res.StatusCode >= 400 {
+		logger.Print(res.StatusCode)
 		err = checkErrorStatus(res.StatusCode)
 		logger.Println(req.URL)
 	} else {
@@ -102,10 +115,6 @@ func (ads *ApiDataSource) GetTicket(path string, query url.Values) (Ticket, erro
 	return ticket, err
 }
 
-// initialPaginationParam is a string used to generate query parameter
-// to fetch paginated results from the API.
-const initialPaginationParam = "page=%v&per_page=%v"
-
 // getNewTicketListReques creates a request to fetch tickets from the api
 // The argument query is expected to have a "page" parameter to specify the pagination.
 // if query doesn't have a "page", it will default to 1
@@ -118,9 +127,9 @@ func getNewTicketListRequest(query url.Values) (*http.Request, error) {
 	page := query.Get("page")
 
 	if page != "" {
-		req.URL.RawQuery = fmt.Sprintf(initialPaginationParam, page, itemLimit)
+		req.URL.RawQuery = fmt.Sprintf(initialPaginationParam, page, ItemLimit)
 	} else {
-		req.URL.RawQuery = fmt.Sprintf(initialPaginationParam, 1, itemLimit)
+		req.URL.RawQuery = fmt.Sprintf(initialPaginationParam, 1, ItemLimit)
 	}
 
 	return req, nil
@@ -235,7 +244,7 @@ func setCustomTicketListFields(r *http.Response, ticketList *TicketList) {
 		}
 	}
 
-	ticketList.TicketDisplayLimit = itemLimit
+	ticketList.TicketDisplayLimit = ItemLimit
 
 	lastPageNum := ticketList.Count / ticketList.TicketDisplayLimit
 	if ticketList.Count%ticketList.TicketDisplayLimit > 0 {
