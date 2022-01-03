@@ -23,7 +23,7 @@ type StubDataSource struct {
 
 func TestMain(m *testing.M) {
 	// set different output path for custom logger
-	f, err := os.OpenFile("logfile", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	f, err := os.OpenFile("logfile", os.O_RDWR|os.O_CREATE, 0666)
 	if err == nil {
 		logger.SetOutput(f)
 	}
@@ -88,7 +88,7 @@ func TestGetIndex(t *testing.T) {
 	}
 
 	t.Run("successful call to single paged index page", func(t *testing.T) {
-		req := getNewTestRequest("/tickets/")
+		req := getNewTestRequest("/tickets")
 		res := httptest.NewRecorder()
 
 		server.ServeHTTP(res, req)
@@ -113,7 +113,7 @@ func TestGetIndex(t *testing.T) {
 		errString := "error: couldn't authenticate you"
 		ds.err = errors.New(errString)
 
-		req := getNewTestRequest("/tickets/")
+		req := getNewTestRequest("/tickets")
 		res := httptest.NewRecorder()
 
 		server.ServeHTTP(res, req)
@@ -130,7 +130,7 @@ func TestGetIndex(t *testing.T) {
 	t.Run("displays 2 paged index first page", func(t *testing.T) {
 		ds.ticketNum = tickets.ItemLimit + 1
 		ds.err = nil
-		req := getNewTestRequest("/tickets/")
+		req := getNewTestRequest("/tickets")
 		res := httptest.NewRecorder()
 
 		server.ServeHTTP(res, req)
@@ -140,9 +140,9 @@ func TestGetIndex(t *testing.T) {
 
 		// assert next is enabled and prev is disabled
 		expression := `<li class=".*disabled".*Next.*</li>`
-		assertNoExpression(t, res.Body.String(), expression, "next button")
+		assertNoExpression(t, res.Body.String(), expression, "enabled next button")
 		expression = `<li class=".*disabled".*Previous.*</li>`
-		assertExpression(t, res.Body.String(), expression, "previous button")
+		assertExpression(t, res.Body.String(), expression, "disabled previous button")
 
 		// assert the number of ticket on the page
 		expression = `</tr>`
@@ -168,9 +168,11 @@ func TestGetIndex(t *testing.T) {
 
 		// assert next is disabled and prev is enabled
 		expression := `<li class=".*disabled".*Next.*</li>`
-		assertExpression(t, res.Body.String(), expression, "next button")
+		assertExpression(t, res.Body.String(), expression, "disabled next button")
 		expression = `<li class=".*disabled".*Previous.*</li>`
-		assertNoExpression(t, res.Body.String(), expression, "previous button")
+		assertNoExpression(t, res.Body.String(), expression, "disabled previous button")
+		expression = `<li.*Previous.*</li>`
+		assertExpression(t, res.Body.String(), expression, "previous button")
 
 		// assert the number of tickets on the page
 		expression = `</tr>`
@@ -179,12 +181,13 @@ func TestGetIndex(t *testing.T) {
 		// assert page number being displayed
 		expression = `<p>Showing page 2 of [0-9] pages.</p>`
 		assertExpression(t, res.Body.String(), expression, "page number")
+
 	})
 
 	t.Run("zero results", func(t *testing.T) {
 		ds.ticketNum = 0
 		ds.err = nil
-		req := getNewTestRequest("/tickets/")
+		req := getNewTestRequest("/tickets")
 		res := httptest.NewRecorder()
 
 		server.ServeHTTP(res, req)
@@ -295,7 +298,7 @@ func assertNoExpression(t testing.TB, body, expression, unexpectedString string)
 	}
 
 	if r.MatchString(body) {
-		t.Errorf("unexpected %s found", unexpectedString)
+		t.Errorf("unexpected %q found", unexpectedString)
 	}
 }
 
@@ -310,6 +313,6 @@ func assertExpression(t testing.TB, body, expression, expectedString string) {
 
 	// if there doesn't exist an error
 	if !r.MatchString(body) {
-		t.Errorf("expected %s, not found", expectedString)
+		t.Errorf("expected %q, not found", expectedString)
 	}
 }
